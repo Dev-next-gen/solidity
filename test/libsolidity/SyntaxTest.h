@@ -26,7 +26,7 @@
 #include <liblangutil/Exceptions.h>
 #include <libsolutil/AnsiColorized.h>
 
-#include <iosfwd>
+#include <ostream>
 #include <string>
 #include <vector>
 #include <utility>
@@ -47,6 +47,20 @@ enum class CompileViaYul
 	Also
 };
 
+std::ostream& operator<<(std::ostream& _out, CompileViaYul _value);
+
+/**
+ * Reflects `compileViaSSACFG` setting, with possible values: `true`, `false` and `also` (default).
+ */
+enum class CompileViaSSACFG
+{
+	True,
+	False,
+	Also
+};
+
+std::ostream& operator<<(std::ostream& _out, CompileViaSSACFG _value);
+
 /**
  * Settings that reflect what is configured in each test file.
  */
@@ -56,9 +70,10 @@ struct SyntaxTestSettings
 	static SyntaxTestSettings fromReader(TestCaseReader& _reader);
 
 	PipelineStage stopAfter = PipelineStage::Compilation;
-	bool experimental = false;
+	std::optional<bool> experimental = std::nullopt;
 
 	CompileViaYul compileViaYul = CompileViaYul::False;
+	CompileViaSSACFG compileViaSSACFG = CompileViaSSACFG::False;
 	bool optimizeYul = false;
 };
 
@@ -95,6 +110,9 @@ protected:
 
 	/// Throws if an internal compiler error was encountered during code generation.
 	void reportUnexpectedErrors();
+
+	/// Prints global options and local settings for debugging purposes.
+	void printOptionsAndSettings(std::ostream& _stream, std::string const& _linePrefix);
 
 	langutil::Error::Severity m_minSeverity{};
 	SyntaxTestSettings m_settings;

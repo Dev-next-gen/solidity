@@ -43,6 +43,28 @@ using namespace solidity::frontend::test;
 using namespace boost::unit_test;
 namespace fs = boost::filesystem;
 
+std::ostream& solidity::frontend::test::operator<<(std::ostream& _out, CompileViaYul _value)
+{
+	switch (_value)
+	{
+	case CompileViaYul::True: return _out << "true";
+	case CompileViaYul::False: return _out << "false";
+	case CompileViaYul::Also: return _out << "also";
+	default: soltestAssert(false);
+	}
+}
+
+std::ostream& solidity::frontend::test::operator<<(std::ostream& _out, CompileViaSSACFG _value)
+{
+	switch (_value)
+	{
+	case CompileViaSSACFG::True: return _out << "true";
+	case CompileViaSSACFG::False: return _out << "false";
+	case CompileViaSSACFG::Also: return _out << "also";
+	default: soltestAssert(false);
+	}
+}
+
 SyntaxTestSettings SyntaxTestSettings::fromReader(TestCaseReader& _reader)
 {
 	SyntaxTestSettings settings;
@@ -155,7 +177,27 @@ TestCase::TestResult SyntaxTest::run(
 		}
 	}
 
+	if (result != TestResult::Success)
+		printOptionsAndSettings(_stream, _linePrefix);
+
 	return result;
+}
+
+void SyntaxTest::printOptionsAndSettings(std::ostream& _stream, std::string const& _linePrefix)
+{
+	solidity::test::CommonOptions::get().printSelectedOptions(
+		_stream,
+		_linePrefix,
+		{"evmVersion", "optimize", "useABIEncoderV1", "batch"}
+	);
+
+	_stream << _linePrefix << "Test Settings: "
+		<< "compileViaYul: " << m_settings.compileViaYul << ", "
+		<< "compileViaSSACFG: " << m_settings.compileViaSSACFG << ", "
+		<< "optimize-yul: " << (m_settings.optimizeYul ? "true" : "false") << ", "
+		<< "experimental: " << (m_settings.experimental.has_value() ? (*m_settings.experimental ? "true" : "false") : "(not set)") << ", "
+		<< "stopAfter: " << m_settings.stopAfter
+		<< std::endl;
 }
 
 void SyntaxTest::filterObtainedErrors()
