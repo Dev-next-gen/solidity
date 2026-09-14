@@ -141,7 +141,7 @@ Object::Structure Object::summarizeStructure() const
 			for (auto const& subSubObj: subObjectStructure.objectPaths)
 				if (subObject->name != subSubObj)
 				{
-					std::string const path = subObject->name + "." + subSubObj;
+					std::string path = subObject->name + "." + subSubObj;
 					yulAssert(!structure.containsData(path));
 					bool const inserted = structure.objectPaths.insert(std::move(path)).second;
 					yulAssert(inserted);
@@ -149,7 +149,7 @@ Object::Structure Object::summarizeStructure() const
 			for (auto const& subSubObjData: subObjectStructure.dataPaths)
 				if (subObject->name != subSubObjData)
 				{
-					std::string const path = subObject->name + "." + subSubObjData;
+					std::string path = subObject->name + "." + subSubObjData;
 					yulAssert(!structure.containsObject(path));
 					bool const inserted = structure.dataPaths.insert(std::move(path)).second;
 					yulAssert(inserted);
