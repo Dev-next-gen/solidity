@@ -161,6 +161,13 @@ public:
 	Dialect const* dialect() const;
 
 private:
+	void appendTo(
+		std::string& _out,
+		size_t _depth,
+		langutil::DebugInfoSelection const& _debugInfoSelection,
+		langutil::CharStreamProvider const* _soliditySourceProvider
+	) const;
+
 	std::shared_ptr<AST const> m_code;
 };
 

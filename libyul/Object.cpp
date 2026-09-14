@@ -45,7 +45,38 @@ std::string Data::toString(DebugInfoSelection const&, CharStreamProvider const*)
 	return "data " + util::escapeAndQuoteString(name) + " hex\"" + util::toHex(data) + "\"";
 }
 
+namespace
+{
+
+/// Equivalent to applying util::indent() @a _depth times, without re-copying the text at each level.
+/// @a _text has to start at the beginning of a line.
+void appendIndented(std::string& _out, std::string_view _text, size_t _depth)
+{
+	while (!_text.empty())
+	{
+		size_t const lineEnd = std::min(_text.find('\n'), _text.size());
+		if (lineEnd > 0)
+			_out.append(4 * _depth, ' ');
+		_out.append(_text.substr(0, lineEnd + 1));
+		_text.remove_prefix(std::min(lineEnd + 1, _text.size()));
+	}
+}
+
+}
+
 std::string Object::toString(
+	DebugInfoSelection const& _debugInfoSelection,
+	CharStreamProvider const* _soliditySourceProvider
+) const
+{
+	std::string result;
+	appendTo(result, 0, _debugInfoSelection, _soliditySourceProvider);
+	return result;
+}
+
+void Object::appendTo(
+	std::string& _out,
+	size_t _depth,
 	DebugInfoSelection const& _debugInfoSelection,
 	CharStreamProvider const* _soliditySourceProvider
 ) const
@@ -54,21 +85,21 @@ std::string Object::toString(
 	yulAssert(dialect(), "No dialect");
 	yulAssert(debugData, "No debug data");
 
-	std::string inner = "code " + AsmPrinter::format(
-		*code(),
-		debugData->sourceNames,
-		_debugInfoSelection,
-		_soliditySourceProvider
+	appendIndented(_out, debugData->formatUseSrcComment() + "object " + util::escapeAndQuoteString(name) + " {\n", _depth);
+	appendIndented(
+		_out,
+		"code " + AsmPrinter::format(*code(), debugData->sourceNames, _debugInfoSelection, _soliditySourceProvider),
+		_depth + 1
 	);
-
 	for (auto const& obj: subObjects)
-		inner += "\n" + obj->toString(_debugInfoSelection, _soliditySourceProvider);
-
-	return
-		debugData->formatUseSrcComment() +
-		"object " + util::escapeAndQuoteString(name) + " {\n" +
-		indent(inner) + "\n" +
-		"}";
+	{
+		_out += '\n';
+		if (auto const* subObject = dynamic_cast<Object const*>(obj.get()))
+			subObject->appendTo(_out, _depth + 1, _debugInfoSelection, _soliditySourceProvider);
+		else
+			appendIndented(_out, obj->toString(_debugInfoSelection, _soliditySourceProvider), _depth + 1);
+	}
+	appendIndented(_out, "\n}", _depth);
 }
 
 Json Data::toJson() const

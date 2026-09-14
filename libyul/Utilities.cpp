@@ -31,11 +31,8 @@
 #include <libsolutil/FixedHash.h>
 #include <libsolutil/Visitor.h>
 
-#include <boost/algorithm/string.hpp>
-
 #include <algorithm>
-#include <sstream>
-#include <vector>
+#include <string_view>
 
 using namespace solidity;
 using namespace solidity::yul;
@@ -45,49 +42,57 @@ std::string solidity::yul::reindent(std::string const& _code)
 {
 	int constexpr indentationWidth = 4;
 
-	auto constexpr static countBraces = [](std::string const& _s) noexcept -> int
+	auto constexpr static countBraces = [](std::string_view _s) noexcept -> int
 	{
-		auto const i = _s.find("//");
-		auto const e = i == _s.npos ? end(_s) : next(begin(_s), static_cast<ptrdiff_t>(i));
-		auto const opening = count_if(begin(_s), e, [](auto ch) { return ch == '{' || ch == '('; });
-		auto const closing = count_if(begin(_s), e, [](auto ch) { return ch == '}' || ch == ')'; });
+		_s = _s.substr(0, _s.find("//"));
+		auto const opening = std::count_if(_s.begin(), _s.end(), [](auto ch) { return ch == '{' || ch == '('; });
+		auto const closing = std::count_if(_s.begin(), _s.end(), [](auto ch) { return ch == '}' || ch == ')'; });
 		return int(opening - closing);
 	};
-
-	std::vector<std::string> lines;
-	boost::split(lines, _code, boost::is_any_of("\n"));
-	for (std::string& line: lines)
-		boost::trim(line);
-
-	// Reduce multiple consecutive empty lines.
-	lines = fold(lines, std::vector<std::string>{}, [](auto&& _lines, auto&& _line) {
-		if (!(_line.empty() && !_lines.empty() && _lines.back().empty()))
-			_lines.emplace_back(std::move(_line));
-		return std::move(_lines);
-	});
-
-	std::stringstream out;
-	int depth = 0;
-
-	for (std::string const& line: lines)
+	// Same character set as boost::trim in the classic locale.
+	auto constexpr static trim = [](std::string_view _s) noexcept -> std::string_view
 	{
-		int const diff = countBraces(line);
-		if (diff < 0)
-			depth += diff;
+		auto const first = _s.find_first_not_of(" \t\n\v\f\r");
+		if (first == std::string_view::npos)
+			return {};
+		return _s.substr(first, _s.find_last_not_of(" \t\n\v\f\r") - first + 1);
+	};
 
-		if (!line.empty())
+	std::string out;
+	out.reserve(_code.size());
+	std::string_view code = _code;
+	int depth = 0;
+	bool previousEmpty = false;
+	while (true)
+	{
+		size_t const lineEnd = code.find('\n');
+		std::string_view const line = trim(code.substr(0, lineEnd));
+
+		// Reduce multiple consecutive empty lines.
+		if (!(line.empty() && previousEmpty))
 		{
-			for (int i = 0; i < depth * indentationWidth; ++i)
-				out << ' ';
-			out << line;
-		}
-		out << '\n';
+			int const diff = countBraces(line);
+			if (diff < 0)
+				depth += diff;
 
-		if (diff > 0)
-			depth += diff;
+			if (!line.empty())
+			{
+				out.append(static_cast<size_t>(std::max(depth * indentationWidth, 0)), ' ');
+				out.append(line);
+			}
+			out += '\n';
+
+			if (diff > 0)
+				depth += diff;
+		}
+		previousEmpty = line.empty();
+
+		if (lineEnd == std::string_view::npos)
+			break;
+		code.remove_prefix(lineEnd + 1);
 	}
 
-	return out.str();
+	return out;
 }
 
 LiteralValue solidity::yul::valueOfNumberLiteral(std::string_view const _literal)
