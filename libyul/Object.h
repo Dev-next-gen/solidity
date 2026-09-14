@@ -31,9 +31,9 @@
 
 #include <libsolutil/Common.h>
 #include <libsolutil/JSON.h>
-#include <libsolutil/UnorderedContainers.h>
 
 #include <memory>
+#include <string_view>
 
 namespace solidity::yul
 {
@@ -100,32 +100,27 @@ public:
 	/// @returns a compact JSON representation of the AST.
 	Json toJson() const override;
 
-	/// Summarizes the structure of the subtree rooted at a given object,
-	/// in particular the paths that can be used from within to refer to nested nodes (objects and data).
+	/// Answers which dot-separated paths to nested objects and data can be referred to from within the code of an object.
+	/// Resolved lazily by walking the tree: materializing all paths is quadratic in the nesting depth.
 	struct Structure
 	{
-		/// boost::hash is much faster for long strings
-		using PathSet = util::unordered_flat_set<std::string, boost::hash<std::string>>;
-
-		/// The name of the object
-		std::string objectName;
-		/// Available dot-separated paths to nested objects (relative to current object).
-		PathSet objectPaths;
-		/// Available dot-separated paths to nested data entries (relative to current object).
-		PathSet dataPaths;
+		/// Must outlive the structure. Null means no paths are available.
+		Object const* object = nullptr;
 
 		/// Checks if a path is available.
-		bool contains(std::string const& _path) const { return containsObject(_path) || containsData(_path); }
+		bool contains(std::string_view _path) const { return resolve(_path) != nullptr; }
 		/// Checks if a path is available and leads to an object.
-		bool containsObject(std::string const& _path) const { return objectPaths.count(_path) > 0; }
+		bool containsObject(std::string_view _path) const;
 		/// Checks if a path is available and leads to a data entry.
-		bool containsData(std::string const& _path) const { return dataPaths.count(_path) > 0; }
+		bool containsData(std::string_view _path) const;
+
+	private:
+		ObjectNode const* resolve(std::string_view _path) const;
 	};
 
-	/// @returns the set of names of data objects accessible from within the code of
-	/// this object, including the name of object itself
-	/// Handles all names containing dots as reserved identifiers, not accessible as data.
-	Structure summarizeStructure() const;
+	/// @returns the structure describing the paths accessible from within the code of this object,
+	/// including the name of object itself.
+	Structure summarizeStructure() const { return Structure{this}; }
 
 	/// @returns vector of subIDs if possible to reach subobject with @a _qualifiedName, throws otherwise
 	/// For "B.C" should return vector of two values if success (subId of B and subId of C in B).

@@ -115,52 +115,41 @@ Json Object::toJson() const
 	return ret;
 }
 
-Object::Structure Object::summarizeStructure() const
+ObjectNode const* Object::Structure::resolve(std::string_view _path) const
 {
-	Structure structure;
+	if (!object || _path.empty())
+		return nullptr;
+	// A dotted object name is not a path by itself, but the same string may still resolve through sub-objects.
+	if (_path == object->name && !util::contains(object->name, '.'))
+		return object;
 
-	structure.objectPaths =
-		name.empty() || util::contains(name, '.') ?
-		Structure::PathSet{} :
-		Structure::PathSet{name};
-
-	structure.objectName = name;
-
-	for (std::shared_ptr<ObjectNode> const& subObjectNode: subObjects)
+	Object const* current = object;
+	size_t start = 0;
+	while (true)
 	{
-		yulAssert(!structure.contains(subObjectNode->name));
-		if (util::contains(subObjectNode->name, '.'))
-			continue;
-
-		if (auto const* subObject = dynamic_cast<Object const*>(subObjectNode.get()))
-		{
-			structure.objectPaths.insert(subObjectNode->name);
-
-			auto const subObjectStructure = subObject->summarizeStructure();
-
-			for (auto const& subSubObj: subObjectStructure.objectPaths)
-				if (subObject->name != subSubObj)
-				{
-					std::string path = subObject->name + "." + subSubObj;
-					yulAssert(!structure.containsData(path));
-					bool const inserted = structure.objectPaths.insert(std::move(path)).second;
-					yulAssert(inserted);
-				}
-			for (auto const& subSubObjData: subObjectStructure.dataPaths)
-				if (subObject->name != subSubObjData)
-				{
-					std::string path = subObject->name + "." + subSubObjData;
-					yulAssert(!structure.containsObject(path));
-					bool const inserted = structure.dataPaths.insert(std::move(path)).second;
-					yulAssert(inserted);
-				}
-		}
-		else
-			structure.dataPaths.insert(subObjectNode->name);
+		size_t const end = _path.find('.', start);
+		std::string_view const component = _path.substr(start, end - start);
+		auto const it = current->subIndexByName.find(component);
+		if (component.empty() || it == current->subIndexByName.end())
+			return nullptr;
+		ObjectNode const* node = current->subObjects[it->second].get();
+		if (end == std::string_view::npos)
+			return node;
+		current = dynamic_cast<Object const*>(node);
+		if (!current)
+			return nullptr;
+		start = end + 1;
 	}
+}
 
-	yulAssert(!structure.contains(""));
-	return structure;
+bool Object::Structure::containsObject(std::string_view _path) const
+{
+	return dynamic_cast<Object const*>(resolve(_path));
+}
+
+bool Object::Structure::containsData(std::string_view _path) const
+{
+	return dynamic_cast<Data const*>(resolve(_path));
 }
 
 std::vector<evmasm::SubAssemblyID> Object::pathToSubObject(std::string_view _qualifiedName) const
